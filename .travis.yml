@@ -4,39 +4,20 @@ services: docker
 notifications:
   email: false
 
-stages:
-  - build
+script: bash build.sh
 
-jobs:
+matrix:
   include:
-    - &docker-build
-      name: "Docker build for ARMV6"
-      stage: build
-      env:
-        - ARCH=arm32 IMAGE_ARCH=arm32v6 QEMU_ARCH=arm
-      before_install:
-        - sudo docker run --rm --privileged multiarch/qemu-user-static:register --reset
-      before_script:
-        - echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin
-      script: |
-        cp Dockerfile Dockerfile.${ARCH}
-        sed -i "s/__IMAGE_ARCH__/${IMAGE_ARCH}/" Dockerfile.${ARCH}
-        if [ ! ${IMAGE_ARCH} == "amd64" ]; then
-          wget --quiet https://github.com/multiarch/qemu-user-static/releases/download/v3.0.0/qemu-${QEMU_ARCH}-static.tar.gz
-          tar -xzf qemu-${QEMU_ARCH}-static.tar.gz
-          sed -i "s/__CROSS_COPY__/COPY/" Dockerfile.${ARCH}
-          sed -i "s/__QEMU_ARCH__/${QEMU_ARCH}/" Dockerfile.${ARCH}
-        else
-          sed -i "/__CROSS_COPY__/d" Dockerfile.${ARCH}
-        fi
-        docker build --tag openblas/alpine:${ARCH} --file Dockerfile.${ARCH} .
-      after_success:
-        - docker push openblas/alpine:${ARCH}
-    - <<: *docker-build
-      name: "Docker build for ARMV8"
-      env:
-        - ARCH=arm64 IMAGE_ARCH=arm64v8 QEMU_ARCH=aarch64
-    - <<: *docker-build
-      name: "Docker build for AMD64"
-      env:
-        - ARCH=amd64 IMAGE_ARCH=amd64
+    - name: "Build Alpine for ARM32"
+      env: ARCH=arm32 IMAGE_ARCH=arm32v6 QEMU_ARCH=arm
+    - name: "Build Alpine for ARM64"
+      env: ARCH=arm64 IMAGE_ARCH=arm64v8 QEMU_ARCH=aarch64
+    - name: "Build Alpine for AMD64"
+      env: ARCH=amd64 IMAGE_ARCH=amd64
+
+deploy:
+  - provider: script
+    script: bash build.sh deploy
+    on:
+      repo: aytekinar/openblas-alpine
+      branch: master
